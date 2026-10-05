@@ -1,6 +1,5 @@
 import { useStore } from '@/state/store';
 import { director } from '@/sim/director';
-import { generateProjectFiles, downloadProjectZip } from '@/services/projectBundle';
 
 export interface ChatMessage {
   role: 'user' | 'manager';
@@ -10,10 +9,6 @@ export interface ChatMessage {
 
 class ManagerMemoryAgent {
   private history: ChatMessage[] = [];
-
-  constructor() {
-    this.history = [];
-  }
 
   public getHistory(): ChatMessage[] {
     return [...this.history];
@@ -46,28 +41,11 @@ class ManagerMemoryAgent {
       reply = `All deliverables for ${projectName} are ready! You can download the complete source code as a .ZIP archive or Markdown report directly from the Final Report modal. In addition, the entire codebase has been saved to your local disk at ${localDir}.`;
       blackboardNote = `Delivered full ${projectName} source bundle & zip export to user.`;
 
-      // Proactively open the report modal with files view
       setTimeout(() => {
         useStore.setState({ reportOpen: true });
       }, 400);
     }
-    // 2. Insights / Observations / Findings
-    else if (
-      lower.includes('insight') ||
-      lower.includes('summary') ||
-      lower.includes('what happened') ||
-      lower.includes('see') ||
-      lower.includes('saw') ||
-      lower.includes('observe')
-    ) {
-      if (isCrypto) {
-        reply = `Key engineering insights from the ${projectName} run:\n1. WebSocket Throttling: Isha and Vikram found that 40+ raw price ticks/sec caused frame drops; they decoupled socket events into a 60fps RAF batch buffer.\n2. Redundant API Fallback: Meera implemented REST polling fallback with CoinGecko in case the socket connection drops.\n3. State Isolation: Kabir reviewed the component tree so price tick updates do not re-render unaffected dashboard cards.`;
-      } else {
-        reply = `Key team insights for ${projectName}:\n1. Modular separation of concerns allowed backend logic and UI components to be built concurrently without merge locks.\n2. Automated test assertions caught 2 boundary edge-cases during lead review.\n3. High-throughput state changes were buffered to maintain UI responsiveness.`;
-      }
-      blackboardNote = `Shared architecture & performance insights for ${projectName}.`;
-    }
-    // 3. Continue / Next Phase
+    // 2. Continue / Next Phase
     else if (
       lower.includes('continue') ||
       lower.includes('next') ||
@@ -78,7 +56,6 @@ class ManagerMemoryAgent {
       reply = `Understood! Launching Phase 2 expansion for ${projectName}. Scheduling: T9 (Portfolio & PnL Tracker ? Rohan), T10 (Price Alert Web Notifications ? Vikram), and T11 (Local Storage Offline Cache ? Isha). Team is mobilizing.`;
       blackboardNote = `Phase 2 roadmap activated for ${projectName}.`;
 
-      // Add Phase 2 tasks to DAG
       const currentTaskCount = Object.keys(s.tasks).length;
       const nextId1 = `T${currentTaskCount + 1}`;
       const nextId2 = `T${currentTaskCount + 2}`;
@@ -140,7 +117,7 @@ class ManagerMemoryAgent {
 
       useStore.setState({ tasks: newTasks, edges: newEdges });
     }
-    // 4. Stop / Cancel / Pause
+    // 3. Stop / Cancel / Pause
     else if (lower.includes('stop') || lower.includes('halt') || lower.includes('cancel') || lower.includes('pause')) {
       reply = `Directive acknowledged. Halting all active worker execution loops. Branch checkpoints are safely frozen.`;
       blackboardNote = `Execution suspended by manager directive.`;
@@ -153,45 +130,36 @@ class ManagerMemoryAgent {
       }
       useStore.setState({ tasks: updatedTasks });
     }
-    // 5. Add specific feature
-    else if (lower.startsWith('add') || lower.includes('implement') || lower.includes('create') || lower.includes('build')) {
-      const feat = userText.replace(/^(add|implement|create|build)s+/i, '').trim();
-      reply = `Assigned feature "${feat}" to specialist lead. Task injected into execution pipeline.`;
-      blackboardNote = `New task registered: "${feat}".`;
-
-      const currentTaskCount = Object.keys(s.tasks).length;
-      const newId = `T${currentTaskCount + 1}`;
-      const workerList = Object.values(s.agents).filter((a) => a.role === 'worker');
-      const assigned = workerList[currentTaskCount % Math.max(1, workerList.length)]?.id ?? 'W_frontend_0';
-
-      const newTasks = {
-        ...s.tasks,
-        [newId]: {
-          id: newId,
-          parent_id: 'M0',
-          description: feat,
-          owner_role: 'frontend',
-          assigned_agent: assigned,
-          status: 'running' as const,
-          priority: 1,
-          depends_on: [],
-          attempts: 0,
-          progress_pct: 20,
-          est_effort_s: 1200,
-        },
-      };
-      useStore.setState({ tasks: newTasks });
-    }
-    // 6. Natural Language Fallback with Memory
+    // 4. Real LLM Reasoning & Technical Conversation Engine
     else {
-      // Memory reasoning
-      const pastUserMessages = this.history.filter((m) => m.role === 'user');
-      if (pastUserMessages.length > 2) {
-        reply = `Understood. With our current progress on ${projectName}, the engineering department has completed core features and verified all tests. How would you like us to proceed?`;
-      } else {
-        reply = `Directive acknowledged: "${userText}". Reviewing current ${projectName} status with team leads.`;
+      try {
+        const systemPrompt = `You are Diya, the Lead Engineering Manager of the GravityDesk autonomous software development swarm.
+Current project: "${goal}" (Target: ${projectName}).
+Team members under your direction:
+- Aanya: Architecture & Lead Systems Engineer
+- Kabir: Lead Frontend Architect (React, TypeScript, WebSocket streaming, Tailwind)
+- Nisha: QA & Verification Lead (Vitest, assertions, boundary checks)
+- Tara: Technical Research & Documentation Lead
+- Rohan: Senior Backend Engineer (APIs, WebSockets, rate limiters)
+- Isha & Vikram: Frontend Core Developers
+Deliverables are stored at: ${localDir}
+Answer the user's question with exceptional technical depth, crisp operational clarity, and professional leadership. Keep your response concise (2-4 sentences max).`;
+
+        const resp = await fetch('http://localhost:8000/api/llm/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: userText, system: systemPrompt })
+        });
+        const data = await resp.json();
+        reply = data.reply || `Understood. Reviewing "${userText}" with team leads.`;
+      } catch {
+        if (lower.includes('insight') || lower.includes('summary')) {
+          reply = `Key team insights for ${projectName}: 1) We implemented an RAF batch buffer to clamp WebSocket ticker state re-renders to 60 FPS, eliminating main-thread lockups. 2) Fallback to CoinGecko REST was added for connection dropouts. 3) Component trees were segmented to isolate card state updates.`;
+        } else {
+          reply = `Directive received: "${userText}". Reviewing current ${projectName} progress with team leads.`;
+        }
       }
-      blackboardNote = `Directive noted: "${userText.slice(0, 40)}..."`;
+      blackboardNote = `Diya responded to user inquiry: "${userText.slice(0, 35)}..."`;
     }
 
     this.history.push({ role: 'manager', text: reply, ts: now });
@@ -199,7 +167,7 @@ class ManagerMemoryAgent {
     // 3D Office visual feedback: Speech bubble over Diya
     const mgr = director.rt('M0');
     if (mgr) {
-      mgr.bubble = { text: reply.length > 80 ? reply.slice(0, 77) + '...' : reply, until: director.time + 6 };
+      mgr.bubble = { text: reply.length > 90 ? reply.slice(0, 87) + '...' : reply, until: director.time + 6 };
     }
 
     // Update store log and blackboard
@@ -216,7 +184,7 @@ class ManagerMemoryAgent {
             id: `note_${Date.now()}`,
             author_agent_id: 'M0',
             topic: 'DIRECTIVE',
-            note: `Diya: ${blackboardNote || reply}`,
+            note: blackboardNote || `Diya: ${reply}`,
             ts: st.simClock,
           },
         ],

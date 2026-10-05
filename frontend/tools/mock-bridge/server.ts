@@ -117,6 +117,36 @@ export function createServer(port = Number(process.env.PORT ?? 8000)) {
       m = p.match(/^\/api\/tasks\/([^/]+)\/cancel$/);
       if (m && req.method === 'POST') { for (const r of runs.values()) if (r.id.replace('run_', 'task_') === m[1]) { clearInterval(r.timer); r.done = true; } return json(res, 200, { ok: true }); }
       if (p === '/api/org') return json(res, 200, { manager: null, leads: [], workers: [], desks: [], zones: [] });
+            if (p === '/api/llm/chat' && req.method === 'POST') {
+        const b = await readBody(req);
+        const apiKey = process.env.GROQ_API_KEY;
+        if (!apiKey) {
+          return json(res, 200, { reply: 'Local reasoning mode (API key not configured in bridge environment).' });
+        }
+        try {
+          const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + apiKey,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              model: 'openai/gpt-oss-120b',
+              messages: [
+                { role: 'system', content: b.system || 'You are Diya, Engineering Manager of GravityDesk.' },
+                { role: 'user', content: b.prompt || 'Hello' }
+              ],
+              temperature: 0.5,
+              max_tokens: 600
+            })
+          });
+          const data = await resp.json();
+          const reply = data.choices?.[0]?.message?.content || 'Acknowledged by manager.';
+          return json(res, 200, { reply });
+        } catch (err: any) {
+          return json(res, 200, { reply: 'Fallback reasoning: ' + (err?.message || String(err)) });
+        }
+      }
       return json(res, 404, { error: 'not found', path: p });
     } catch (e: any) { return json(res, 500, { error: String(e?.message ?? e) }); }
   });
