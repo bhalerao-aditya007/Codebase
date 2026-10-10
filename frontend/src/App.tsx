@@ -8,15 +8,33 @@ import { setAccent, resetAccentBlend } from '@/three/materials';
 import { engine, GOLDEN_GOAL } from '@/state/engine';
 import { validateLayout } from '@/nav/validate';
 import { GRID } from '@/nav/grid';
+import { buildHallLayout } from '@/swarm/hallLayout';
+import { validateHall } from '@/swarm/validateHall';
 
 export default function App() {
   const phase = useStore((s) => s.phase);
+  const appMode = useStore((s) => s.appMode);
+  const swarmSize = useStore((s) => s.swarmSize);
 
   useEffect(() => {
     // startup validator — the app refuses to run on an invalid layout
     const errs = validateLayout(GRID);
     if (errs.length) throw new Error('Layout validation failed:\n' + errs.join('\n'));
+    if ((import.meta as any).env?.DEV) {
+      for (const n of [10, 20, 30, 40, 50] as const) {
+        const issues = validateHall(buildHallLayout(n));
+        if (issues.length) console.warn(`[swarm] hall validation warning for N=${n}:`, issues);
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    if (appMode === 'swarm' && phase === 'landing') {
+      import('@/swarm/directorRef').then(({ rebuildSwarmDirector }) => {
+        rebuildSwarmDirector(swarmSize);
+      });
+    }
+  }, [appMode, swarmSize, phase]);
 
   useEffect(() => {
     // brand color -> materials + CSS vars
@@ -32,13 +50,13 @@ export default function App() {
     }
   }, []);
 
-  // landing: loop the golden run in the background
+  // landing: loop the ambient run in the background (office or swarm)
   useEffect(() => {
     if (phase === 'landing') {
-      engine.start(GOLDEN_GOAL);
+      engine.start(appMode === 'swarm' ? 'Best go-to-market plan for a student-run coffee cart' : GOLDEN_GOAL);
       engine.setSpeed(2);
     }
-  }, [phase]);
+  }, [phase, appMode]);
 
   return <div className="h-full w-full">{phase === 'landing' ? <Landing /> : <Workspace />}</div>;
 }

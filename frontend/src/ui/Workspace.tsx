@@ -15,11 +15,14 @@ import { engine } from '@/state/engine';
 import { director } from '@/sim/director';
 import { cameraCtl } from '@/three/cameraCtl';
 import { Icon, I } from './Icons';
+import { SwarmCanvas } from '@/swarm/SwarmCanvas';
+import { SwarmPanel, SwarmRoster } from '@/swarm/SwarmPanel';
 
 export function Workspace() {
   const offline = useStore((s) => s.offline);
   const toast = useStore((s) => s.toast);
   const dev = useStore((s) => s.dev);
+  const appMode = useStore((s) => s.appMode);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -42,20 +45,20 @@ export function Workspace() {
     <div className="h-full flex flex-col bg-paper">
       <Toolbar />
       <div className="flex-1 flex min-h-0 relative">
-        <LeftPanel />
+        {appMode === 'swarm' ? <SwarmRoster /> : <LeftPanel />}
         <div className="flex-1 relative min-w-0">
-          <OfficeCanvas />
-          <Minimap />
-          <TriageBanner />
-          <PermissionPanel />
+          {appMode === 'swarm' ? <SwarmCanvas /> : <OfficeCanvas />}
+          {appMode !== 'swarm' && <Minimap />}
+          {appMode !== 'swarm' && <TriageBanner />}
+          {appMode !== 'swarm' && <PermissionPanel />}
           <button
             onClick={() => useStore.setState({ drawerOpen: !useStore.getState().drawerOpen }) }
             className="absolute top-4 right-4 z-20 rounded-xl px-3 py-2 text-xs font-heading text-white shadow-md flex items-center gap-1.5"
             style={{ background: 'var(--accent)' }}>
-            <Icon d={I.chart} size={13} /> Compute & Cost
+            <Icon d={appMode === 'swarm' ? I.users : I.chart} size={13} /> {appMode === 'swarm' ? 'Swarm Panel' : 'Compute & Cost'}
           </button>
           <Inspector />
-          <ComputeDrawer />
+          {appMode === 'swarm' ? <SwarmPanel /> : <ComputeDrawer />}
           <ReportView />
           <SettingsModal />
           {offline && (

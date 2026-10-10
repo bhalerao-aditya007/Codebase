@@ -8,7 +8,7 @@ import { triage } from '@/mock/triage';
 import goldenRun from '@/mock/goldenRun.json';
 
 export interface RunEngine {
-  start(goal: string): void;
+  start(goal: string): Promise<void> | void;
   stop(): void;
   setSpeed(f: number): void;
   pause(p: boolean): void;
@@ -34,12 +34,22 @@ class MockEngine implements RunEngine {
   private lastTick = 0;
   private startedAt = 0;
 
-  start(goal: string) {
+  async start(goal: string) {
     this.stop();
     director.reset();
     useStore.getState().resetRun(goal);
     director.pace = triage(goal).break_policy.pace;
-    this.sim = new MockSimulator(goal);
+    const st = useStore.getState();
+    if (st.appMode === 'swarm') {
+      const { rebuildSwarmDirector } = await import('@/swarm/directorRef');
+      const { buildSwarmScript } = await import('@/swarm/mockSwarm');
+      const { applyRoleColors } = await import('@/swarm/roles');
+      rebuildSwarmDirector(st.swarmSize);
+      applyRoleColors(st.accent);
+      this.sim = new MockSimulator(goal, buildSwarmScript(goal, st.swarmSize));
+    } else {
+      this.sim = new MockSimulator(goal);
+    }
     this.replayTape = [];
     this.startedAt = performance.now();
     this.lastTick = 0;
@@ -111,7 +121,18 @@ class LiveEngine implements RunEngine {
     useStore.getState().resetRun(goal);
     this.replayTape = [];
     try {
-      const { run_id } = await this.client.createTask(goal, useStore.getState().modelId, { profile: useStore.getState().profile } as any);
+      const st = useStore.getState();
+      if (st.appMode === 'swarm') {
+        const { rebuildSwarmDirector } = await import('@/swarm/directorRef');
+        const { applyRoleColors } = await import('@/swarm/roles');
+        rebuildSwarmDirector(st.swarmSize);
+        applyRoleColors(st.accent);
+      }
+      const { run_id } = await this.client.createTask(
+        goal,
+        st.modelId,
+        { profile: st.profile, mode: st.appMode, swarm_size: st.swarmSize } as any
+      );
       this.stream = new HttpStream();
       this.stream.start(run_id, 0, (e) => {
         const ev = parseEvent(e);

@@ -7,7 +7,7 @@ let simTimeMin = 9 * 60;
 const hhmm = () =>
   `${String(Math.floor(simTimeMin / 60)).padStart(2, '0')}:${String(Math.floor(simTimeMin % 60)).padStart(2, '0')}`;
 
-export type RawEv = { t: number; type: string; agent_id?: string; task_id?: string; payload?: any };
+export type RawEv = { t: number; type: string; agent_id?: string; task_id?: string | undefined; payload?: any };
 function ev(t: number, type: string, agent_id?: string, task_id?: string, payload?: any): RawEv {
   return { t, type, agent_id, task_id, payload };
 }
@@ -273,7 +273,7 @@ export class MockSimulator {
   runId = 'run_local';
   recorded: Envelope[] = [];
 
-  constructor(goal: string) { this.script = buildScript(goal); }
+  constructor(goal: string, script?: RawEv[]) { this.script = script ?? buildScript(goal); }
 
   start(onEvent: (e: Envelope) => void) {
     this.onEvent = onEvent; this.running = true; this.lastReal = performance.now();

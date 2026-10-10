@@ -7,6 +7,8 @@ import { Task } from '@/api/types';
 import { setDepartments } from './departments';
 import { LAYOUT } from '@/config/layout';
 import { CHAIR_TYPES } from '@/config/furnitureDefs';
+import { swarmDirector } from '@/swarm/directorRef';
+import { voteFx } from '@/swarm/IdeaBoard';
 
 const name = (id?: string) => useStore.getState().agents[id ?? '']?.name ?? id ?? '';
 
@@ -149,21 +151,28 @@ export function applyEvent(e: Envelope, instant = false) {
         energy: p.energy, context_tokens: p.context_tokens, context_max: p.context_max,
         pending: p.pending, done: p.done, failed: p.failed,
       });
+      if (useStore.getState().appMode === 'swarm') {
+        const s = useStore.getState().swarm;
+        if (s.agents[p.agent_id]) useStore.setState({ swarm: { ...s, agents: { ...s.agents, [p.agent_id]: { ...s.agents[p.agent_id], energy: p.energy, context_tokens: p.context_tokens, context_max: p.context_max } } } });
+      }
       break;
     case 'agent.moved':
       director.sendTo(e.agent_id!, p.purpose, instant);
       pushLog(e, `${name(e.agent_id)} is heading to the ${p.purpose === 'desk' ? 'desk' : p.purpose}`);
       break;
     case 'agent.break_start':
-      director.startBreak(e.agent_id!, p.kind, p.duration_sim_s, instant);
+      if (useStore.getState().appMode === 'swarm') swarmDirector.breakStart(e.agent_id!, p.kind);
+      else director.startBreak(e.agent_id!, p.kind, p.duration_sim_s, instant);
       pushLog(e, breakCaption(name(e.agent_id), p.kind));
       break;
     case 'agent.chat':
-      director.startChat(e.agent_id!, p.with_agent_id, p.duration_ms, p.line, instant);
+      if (useStore.getState().appMode === 'swarm') swarmDirector.chat(e.agent_id!, p.with_agent_id, p.line);
+      else director.startChat(e.agent_id!, p.with_agent_id, p.duration_ms, p.line, instant);
       pushLog(e, `${name(e.agent_id)} chats with ${name(p.with_agent_id)}`);
       break;
     case 'agent.break_end':
-      director.endBreak(e.agent_id!, instant);
+      if (useStore.getState().appMode === 'swarm') swarmDirector.breakEnd(e.agent_id!);
+      else director.endBreak(e.agent_id!, instant);
       break;
     case 'message.sent':
       director.envelopeFrom(p.from_agent_id, p.to_agent_id);
@@ -181,13 +190,15 @@ export function applyEvent(e: Envelope, instant = false) {
       const byModel = { ...useStore.getState().llmByModel }; byModel[p.model] = (byModel[p.model] ?? 0) + 1;
       setMetrics(p.agent_id, { llm_calls: 1 });
       useStore.setState({ llmByRole: byRole, llmByModel: byModel });
-      director.setActivityFor(e.agent_id!, 'THINK');
+      if (useStore.getState().appMode === 'swarm') swarmDirector.setThink(e.agent_id!, true);
+      else director.setActivityFor(e.agent_id!, 'THINK');
       pushLog(e, `${name(e.agent_id)} is thinking (${p.model})`);
       break;
     }
     case 'llm.call_finished':
       setMetrics(e.agent_id!, { tokens_in: p.tokens_in, tokens_out: p.tokens_out });
-      director.setActivityFor(e.agent_id!, 'WORKING');
+      if (useStore.getState().appMode === 'swarm') swarmDirector.setThink(e.agent_id!, false);
+      else director.setActivityFor(e.agent_id!, 'WORKING');
       break;
     case 'gate.state':
       useStore.setState({ gate: p });
@@ -263,6 +274,69 @@ export function applyEvent(e: Envelope, instant = false) {
       useStore.setState({ toast: p.message });
       pushLog(e, `Run error: ${p.message}`);
       break;
+    // ── Swarm ────────────────────────────────────────────
+    case 'swarm.started': {
+      useStore.setState({ swarm: { ...useStore.getState().swarm, topic: p.topic, moderatorId: p.moderator_id, phase: 'frame', round: 1 } });
+      pushLog(e, `Swarm of ${p.size} convened on: "${p.topic.slice(0, 60)}"`);
+      break;
+    }
+    case 'swarm.agent_joined': {
+      const a = p.agent;
+      const swarm = useStore.getState().swarm;
+      useStore.setState({ swarm: { ...swarm, agents: { ...swarm.agents, [a.id]: { ...a, seat_index: p.seat_index } } } });
+      swarmDirector.join(a.id, a.avatar_seed, a.department ?? 'strategist', p.seat_index, a.role === 'manager', instant);
+      pushLog(e, `${a.name} takes a seat${a.role === 'manager' ? ' at the moderator lectern' : ''}`);
+      break;
+    }
+    case 'swarm.phase': {
+      useStore.setState({ swarm: { ...useStore.getState().swarm, phase: p.phase, round: p.round } });
+      pushLog(e, p.note ? `Phase: ${p.phase} — "${p.note.slice(0, 90)}"` : `Phase: ${p.phase} (round ${p.round})`);
+      break;
+    }
+    case 'swarm.proposal': {
+      const s = useStore.getState().swarm;
+      useStore.setState({ swarm: { ...s,
+        ideas: { ...s.ideas, [p.idea_id]: { id: p.idea_id, agent_id: p.agent_id, text: p.text, tags: p.tags } },
+        ideaOrder: [...s.ideaOrder, p.idea_id], speakingId: p.agent_id } });
+      swarmDirector.speak(p.agent_id, p.text);
+      pushLog(e, `${name(p.agent_id)} proposes: "${p.text.slice(0, 80)}"`);
+      break;
+    }
+    case 'swarm.cluster': {
+      const s = useStore.getState().swarm;
+      const ideas = { ...s.ideas };
+      p.idea_ids.forEach((iid: string) => { if (ideas[iid]) ideas[iid] = { ...ideas[iid], cluster_id: p.cluster_id }; });
+      useStore.setState({ swarm: { ...s, ideas,
+        clusters: { ...s.clusters, [p.cluster_id]: { id: p.cluster_id, label: p.label, idea_ids: p.idea_ids } },
+        clusterOrder: [...s.clusterOrder, p.cluster_id] } });
+      pushLog(e, `Cluster "${p.label}" formed (${p.idea_ids.length} ideas)`);
+      break;
+    }
+    case 'swarm.critique': {
+      const s = useStore.getState().swarm;
+      useStore.setState({ swarm: { ...s, critiques: [...s.critiques, { agent_id: p.agent_id, idea_id: p.idea_id, stance: p.stance, text: p.text }] } });
+      swarmDirector.speak(p.agent_id, p.text);
+      pushLog(e, `${name(p.agent_id)} ${p.stance === 'support' ? 'supports' : 'challenges'}: "${p.text.slice(0, 70)}"`);
+      break;
+    }
+    case 'swarm.vote': {
+      const s = useStore.getState().swarm;
+      useStore.setState({ swarm: { ...s, votes: [...s.votes, { agent_id: p.agent_id, idea_id: p.idea_id, score: p.score }] } });
+      const from = swarmDirector.pos(p.agent_id);
+      if (from) voteFx.push({ from, ideaId: p.idea_id, t: 0 });
+      sfx.tick();
+      break;
+    }
+    case 'swarm.tally': {
+      useStore.setState({ swarm: { ...useStore.getState().swarm, tally: { scores: p.scores, agreement: p.agreement } } });
+      break;
+    }
+    case 'swarm.synthesis': {
+      useStore.setState({ swarm: { ...useStore.getState().swarm, synthesis: { text: p.text, source_idea_ids: p.source_idea_ids } } });
+      swarmDirector.speak(useStore.getState().swarm.moderatorId, p.text.split('\n')[0]);
+      pushLog(e, `Synthesis ready — built from ${p.source_idea_ids.length} ideas`);
+      break;
+    }
   }
 }
 

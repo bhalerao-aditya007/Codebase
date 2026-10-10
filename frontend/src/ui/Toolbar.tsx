@@ -38,6 +38,11 @@ export function Toolbar() {
 
         <div className="w-px h-5 bg-ink/10 mx-0.5" />
 
+        <span className="text-[10px] font-mono uppercase px-2 py-1 rounded-full whitespace-nowrap"
+          style={{ background: s.appMode === 'swarm' ? 'var(--accent)' : 'transparent', color: s.appMode === 'swarm' ? '#fff' : 'var(--accent)', border: '1px solid var(--accent)' }}>
+          {s.appMode === 'swarm' ? `Swarm · ${s.swarmSize} agents` : 'Office'}
+        </span>
+
         {/* Accent Picker */}
         <label className="relative cursor-pointer flex items-center" title="Theme accent color">
           <input
@@ -72,12 +77,14 @@ export function Toolbar() {
           ))}
         </div>
 
-        <ToolbarBtn
-          active={s.flows}
-          onClick={() => useStore.setState({ flows: !s.flows })}
-          icon={I.flow}
-          label="Flows"
-        />
+        {s.appMode === 'office' && (
+          <ToolbarBtn
+            active={s.flows}
+            onClick={() => useStore.setState({ flows: !s.flows })}
+            icon={I.flow}
+            label="Flows"
+          />
+        )}
 
         <ToolbarBtn
           active={s.night}

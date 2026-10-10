@@ -136,6 +136,16 @@ const payloadFor: Record<string, z.ZodTypeAny> = {
     effort_logical_s: z.number(), effort_real_s: z.number(),
   }),
   'run.error': z.object({ message: z.string(), recoverable: z.boolean() }),
+  // ── Swarm v4 (additive) ──
+  'swarm.started': z.object({ size: z.number(), topic: z.string(), moderator_id: z.string() }),
+  'swarm.agent_joined': z.object({ agent: AgentSchema, seat_index: z.number() }),
+  'swarm.phase': z.object({ phase: z.enum(['frame', 'diverge', 'cluster', 'critique', 'vote', 'synthesize', 'done']), round: z.number(), note: z.string().optional() }),
+  'swarm.proposal': z.object({ agent_id: z.string(), idea_id: z.string(), text: z.string(), tags: z.array(z.string()).optional() }),
+  'swarm.cluster': z.object({ cluster_id: z.string(), label: z.string(), idea_ids: z.array(z.string()) }),
+  'swarm.critique': z.object({ agent_id: z.string(), idea_id: z.string(), stance: z.enum(['support', 'challenge']), text: z.string() }),
+  'swarm.vote': z.object({ agent_id: z.string(), idea_id: z.string(), score: z.number() }),
+  'swarm.tally': z.object({ scores: z.array(z.object({ idea_id: z.string(), score: z.number(), votes: z.number() })), agreement: z.number() }),
+  'swarm.synthesis': z.object({ text: z.string(), source_idea_ids: z.array(z.string()) }),
 };
 
 export const EventSchema = P.superRefine((v, ctx) => {
@@ -152,6 +162,10 @@ export interface FinalResult {
   report_markdown: string; sources: { title: string; url: string; verified: boolean }[];
   effort_logical_s: number; effort_real_s: number;
 }
+export interface SwarmIdea { id: string; agent_id: string; text: string; tags?: string[]; cluster_id?: string }
+export interface SwarmCluster { id: string; label: string; idea_ids: string[] }
+export interface SwarmCritique { agent_id: string; idea_id: string; stance: 'support' | 'challenge'; text: string }
+export interface SwarmAgentRec { id: string; name: string; role: string; department: string; engine_label: string; seat_index: number; energy: number; avatar_seed: number }
 export function parseEvent(raw: unknown): Envelope | null {
   const r = EventSchema.safeParse(raw);
   return r.success ? r.data : null;

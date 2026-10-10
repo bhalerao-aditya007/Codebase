@@ -27,5 +27,8 @@
     "3d-office"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "vite": "^8.3.4"
+  }
 }

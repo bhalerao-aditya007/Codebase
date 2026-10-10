@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Agent, BlackboardNote, DepartmentDef, Envelope, FinalResult, Metrics, ModelInfo, PermissionRequest, Task, TriageResult } from '@/api/types';
+import { Agent, BlackboardNote, DepartmentDef, Envelope, FinalResult, Metrics, ModelInfo, PermissionRequest, Task, TriageResult, SwarmIdea, SwarmCluster, SwarmCritique } from '@/api/types';
 import { DEFAULT_ACCENT } from '@/config/office';
 
 export interface AgentUI extends Agent {
@@ -28,6 +28,20 @@ interface Store {
   selected: string | null; inspectorOpen: boolean; drawerOpen: boolean; settingsOpen: boolean; reportOpen: boolean;
   followId: string | null; toast: string | null; offline: boolean; demoMode: boolean;
   replayIdx: number; replayPlaying: boolean; notePulse: number;
+  appMode: 'office' | 'swarm';
+  swarmSize: 10 | 20 | 30 | 40 | 50;
+  swarmPhaseTick: number;
+  swarm: {
+    phase: string; round: number; topic: string; moderatorId: string;
+    agents: Record<string, any>;
+    ideas: Record<string, SwarmIdea>; ideaOrder: string[];
+    clusters: Record<string, SwarmCluster>; clusterOrder: string[];
+    critiques: SwarmCritique[];
+    votes: { agent_id: string; idea_id: string; score: number }[];
+    tally: { scores: { idea_id: string; score: number; votes: number }[]; agreement: number } | null;
+    speakingId: string | null;
+    synthesis: { text: string; source_idea_ids: string[] } | null;
+  };
   triage: TriageResult | null;
   departments: Record<string, DepartmentDef>;
   pendingPermissions: PermissionRequest[];
@@ -55,6 +69,14 @@ export const useStore = create<Store>((set) => ({
   selected: null, inspectorOpen: false, drawerOpen: false, settingsOpen: false, reportOpen: false,
   followId: null, toast: null, offline: false, demoMode: true,
   replayIdx: 0, replayPlaying: true, notePulse: 0,
+  appMode: 'office',
+  swarmSize: 20,
+  swarmPhaseTick: 0,
+  swarm: {
+    phase: '', round: 0, topic: '', moderatorId: '',
+    agents: {}, ideas: {}, ideaOrder: [], clusters: {}, clusterOrder: [],
+    critiques: [], votes: [], tally: null, speakingId: null, synthesis: null,
+  },
   triage: null,
   departments: {},
   pendingPermissions: [],
@@ -73,6 +95,11 @@ export const useStore = create<Store>((set) => ({
     planOutline: [], selected: null, inspectorOpen: false, followId: null,
     triage: null, departments: {}, pendingPermissions: [], contextStages: {}, fileEdits: {}, checkpoint: null,
     simClock: '09:00', realElapsed: 0, effortLogical: 0, replayIdx: 0, replayPlaying: true, mode: 'live',
+    swarm: {
+      phase: '', round: 0, topic: '', moderatorId: '',
+      agents: {}, ideas: {}, ideaOrder: [], clusters: {}, clusterOrder: [],
+      critiques: [], votes: [], tally: null, speakingId: null, synthesis: null,
+    },
   }),
 }));
 

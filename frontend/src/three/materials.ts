@@ -104,6 +104,14 @@ export function tickMaterials(dt: number) {
 export function resetAccentBlend() { tBlend = 0; }
 function easeOut(t: number) { return 1 - (1 - t) * (1 - t); }
 
+export function registerDynamicDept(id: string, hex: string) {
+  initMaterials();
+  const key = `dept_${id}`;
+  const entry = registry.get(key);
+  if (entry) (entry.mat as THREE.MeshStandardMaterial).color.set(hex);
+  else registry.set(key, { mat: std(new THREE.Color(hex).getHex()) });
+}
+
 // Blueprint mode: swap shared materials to a line style
 let bp = false;
 const bpMat = new THREE.MeshBasicMaterial({ color: 0xcfe3ff, wireframe: true });

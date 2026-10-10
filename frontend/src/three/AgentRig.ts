@@ -113,6 +113,11 @@ export function buildRig(seed: number, dept: Dept | null, role: string): Rig {
         } else if (p.activity === 'review') { targets.armL = targets.armR = -1.0; }
         else if (p.activity === 'eat') { targets.armR = -1.9 + Math.sin(p.t * 1.6) * 0.25; targets.armL = -1.6; }
         else if (p.activity === 'wait') { targets.armL = -1.9; targets.headNod = 0.2; }
+        else if (p.activity === 'talk') {
+          targets.armL = -0.9 + Math.sin(p.t * 3.1) * 0.3;
+          targets.armR = -1.1 + Math.cos(p.t * 2.7) * 0.35;
+          targets.headNod = Math.sin(p.t * 2.2) * 0.1;
+        }
         else { targets.armL = targets.armR = -0.25; targets.headNod = 0; }
       } else {
         targets.hipY = 0.84;
